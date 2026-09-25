@@ -1,0 +1,610 @@
+<main class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">AM</span>
+      <div>
+        <strong>Asignación Medicina</strong>
+        <small>Parametría y ejecución</small>
+      </div>
+    </div>
+
+    <div class="sidebar-actions">
+      <button type="button" class="primary" (click)="newParametria()">Nueva</button>
+      <button type="button" (click)="loadSample()">Cargar ejemplo</button>
+    </div>
+
+    <section class="saved-list">
+      <header>
+        <span>Parametrías</span>
+        <button type="button" class="icon-button" title="Actualizar lista" (click)="loadParametrias()">
+          ↻
+        </button>
+      </header>
+
+      <button
+        type="button"
+        class="saved-item"
+        *ngFor="let item of parametrias(); trackBy: trackByIndex"
+        [class.active]="selectedParametriaId() === item.id"
+        (click)="loadParametria(item.id)"
+      >
+        <span>{{ item.nombre }}</span>
+        <small>#{{ item.id }} · {{ item.estrategia }}</small>
+      </button>
+
+      <p class="empty" *ngIf="parametrias().length === 0">Sin parametrías guardadas.</p>
+    </section>
+  </aside>
+
+  <section class="workspace">
+    <header class="topbar">
+      <div>
+        <h1>{{ form().nombre }}</h1>
+        <p>
+          {{ selectedParametriaId() ? 'Editando parametría #' + selectedParametriaId() : 'Nueva parametría' }}
+        </p>
+      </div>
+
+      <div class="topbar-actions">
+        <button type="button" routerLink="/dashboard">
+          Dashboard gerencial
+        </button>
+        <button type="button" (click)="deleteSelected()" [disabled]="!selectedParametriaId() || loading()">
+          Eliminar
+        </button>
+        <button type="button" class="primary" (click)="save()" [disabled]="loading()">Guardar</button>
+        <button type="button" class="run" (click)="saveAndExecute()" [disabled]="loading()">
+          Guardar y ejecutar
+        </button>
+        <button type="button" (click)="viewSavedResults()" [disabled]="!selectedParametriaId() || loading()">
+          Ver resultados
+        </button>
+        <button type="button" class="run" (click)="execute()" [disabled]="!selectedParametriaId() || loading()">
+          Ejecutar
+        </button>
+      </div>
+    </header>
+
+    <div class="status success" *ngIf="notice()">{{ notice() }}</div>
+    <div class="status error" *ngIf="error()">{{ error() }}</div>
+
+    <section class="agent-panel" [class.working]="agentStatus() === 'working'" [class.warning]="agentStatus() === 'warning'">
+      <header class="agent-header">
+        <div>
+          <span>Agente de asignación</span>
+          <strong>{{ agentSummary() }}</strong>
+        </div>
+        <small>{{ agentStatusLabel() }}</small>
+      </header>
+
+      <div class="agent-body">
+        <ol class="agent-log">
+          <li *ngFor="let step of agentSteps(); trackBy: trackByIndex">{{ step }}</li>
+        </ol>
+
+        <div class="agent-risks" *ngIf="agentRisks().length">
+          <span>Riesgos detectados</span>
+          <article *ngFor="let risk of agentRisks(); trackBy: trackByIndex" [class.high]="risk.severidad === 'alta'">
+            <strong>{{ risk.titulo }}</strong>
+            <p>{{ risk.detalle }}</p>
+          </article>
+        </div>
+
+        <div class="agent-recommendations">
+          <span>Recomendaciones</span>
+          <p *ngFor="let recommendation of agentRecommendations(); trackBy: trackByIndex">
+            {{ recommendation }}
+          </p>
+        </div>
+      </div>
+
+      <div class="optimization-box">
+        <div class="agent-section-title">
+          <div>
+            <span>Optimizar parametría</span>
+            <strong *ngIf="optimizationResult()">{{ optimizationResult()?.resultado }}</strong>
+          </div>
+          <button type="button" class="collapse-button" (click)="toggleOptimization()">
+            {{ optimizationVisible() ? 'Ocultar' : 'Mostrar' }}
+          </button>
+        </div>
+
+        <div *ngIf="optimizationVisible()">
+        <div class="agent-actions">
+          <button type="button" (click)="optimizeCupos()" [disabled]="!selectedParametriaId() || loading()">
+            Sugerir cupos
+          </button>
+          <button type="button" class="run" (click)="optimizeParametria()" [disabled]="!selectedParametriaId() || loading()">
+            Validar optimización
+          </button>
+          <button
+            type="button"
+            class="primary"
+            (click)="applyOptimization()"
+            [disabled]="!optimizationResult()?.parametria_sugerida?.length || loading()"
+          >
+            Aplicar y ejecutar
+          </button>
+        </div>
+
+        <div class="optimization-summary" *ngIf="optimizationResult() as optimization">
+          <p>{{ optimization.resumen }}</p>
+          <div>
+            <span>Cupos actuales</span>
+            <strong>{{ optimization.cupos_totales_actuales }}</strong>
+          </div>
+          <div>
+            <span>Cupos sugeridos</span>
+            <strong>{{ optimization.cupos_totales_sugeridos }}</strong>
+          </div>
+          <div>
+            <span>Reducción</span>
+            <strong>{{ optimization.reduccion_cupos }}</strong>
+          </div>
+        </div>
+
+        <div class="table-wrap compact" *ngIf="optimizationResult()?.parametria_sugerida?.length">
+          <table>
+            <thead>
+              <tr>
+                <th>Institución</th>
+                <th>Especialidad</th>
+                <th>Actual</th>
+                <th>Sugerido</th>
+                <th>Razón</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of optimizationResult()?.parametria_sugerida; trackBy: trackByIndex">
+                <td>{{ item.institucion }}</td>
+                <td>{{ item.especialidad }}</td>
+                <td>{{ item.cupo_actual }}</td>
+                <td>
+                  <span
+                    class="capacity-indicator"
+                    [class.up]="capacityTrend(item.cupo_actual, item.cupo_sugerido) === 'up'"
+                    [class.down]="capacityTrend(item.cupo_actual, item.cupo_sugerido) === 'down'"
+                    [class.same]="capacityTrend(item.cupo_actual, item.cupo_sugerido) === 'same'"
+                    [title]="capacityTrendLabel(item.cupo_actual, item.cupo_sugerido)"
+                  >
+                    {{ capacityTrendIcon(item.cupo_actual, item.cupo_sugerido) }}
+                    {{ item.cupo_sugerido }}
+                  </span>
+                </td>
+                <td>{{ item.razon }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="empty" *ngFor="let warning of optimizationResult()?.advertencias ?? []; trackBy: trackByIndex">
+          {{ warning }}
+        </p>
+        </div>
+      </div>
+    </section>
+
+    <nav class="tabs">
+      <button type="button" [class.active]="activeTab() === 'parametria'" (click)="setTab('parametria')">
+        Parametría
+      </button>
+      <button type="button" [class.active]="activeTab() === 'estudiantes'" (click)="setTab('estudiantes')">
+        Estudiantes
+      </button>
+      <button type="button" [class.active]="activeTab() === 'reglas'" (click)="setTab('reglas')">
+        Reglas
+      </button>
+      <button type="button" [class.active]="activeTab() === 'resultados'" (click)="setTab('resultados')">
+        Resultados
+        <span *ngIf="resultados().length">{{ resultados().length }}</span>
+      </button>
+      <button type="button" [class.active]="activeTab() === 'analisis'" (click)="setTab('analisis')">
+        Análisis
+      </button>
+    </nav>
+
+    <section class="panel" *ngIf="activeTab() === 'parametria'">
+      <div class="section-title">
+        <h2>Configuración general</h2>
+        <p>Define el número de periodos, estrategia y entidad residual.</p>
+      </div>
+
+      <div class="form-grid">
+        <label>
+          Nombre
+          <input [(ngModel)]="form().nombre" />
+        </label>
+        <label>
+          Periodos
+          <input type="number" min="6" max="8" [(ngModel)]="form().asignacion.numero_periodos" />
+        </label>
+        <label>
+          Estrategia
+          <select [(ngModel)]="form().asignacion.asignacion">
+            <option value="CONCENTRADA">CONCENTRADA</option>
+            <option value="BALANCEADA">BALANCEADA</option>
+          </select>
+        </label>
+        <label>
+          Institución residual
+          <input [(ngModel)]="form().asignacion.institucion_residual" />
+        </label>
+      </div>
+
+      <div class="switch-row">
+        <label>
+          <input type="checkbox" [(ngModel)]="form().asignacion.estudiantes_aleatorio" />
+          Estudiantes en aleatorio
+        </label>
+        <label>
+          <input type="checkbox" [(ngModel)]="form().asignacion.instituciones_aleatorio" />
+          Instituciones en aleatorio
+        </label>
+      </div>
+
+      <div class="table-header">
+        <div>
+          <h2>Instituciones y cupos</h2>
+          <p>{{ form().instituciones.length }} registros</p>
+        </div>
+        <button type="button" (click)="addInstitucion()">Agregar institución</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Institución</th>
+              <th>Especialidad</th>
+              <th class="number">Cupo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of form().instituciones; let i = index; trackBy: trackByIndex">
+              <td><input [(ngModel)]="item.institucion" /></td>
+              <td><input [(ngModel)]="item.especialidad" /></td>
+              <td><input type="number" min="0" [(ngModel)]="item.cantidad" /></td>
+              <td><button type="button" class="danger" (click)="removeInstitucion(i)">Quitar</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" *ngIf="activeTab() === 'estudiantes'">
+      <div class="table-header">
+        <div>
+          <h2>Lista de estudiantes</h2>
+          <p>{{ form().estudiantes.length }} estudiantes vinculados a esta parametría</p>
+        </div>
+        <button type="button" (click)="addEstudiante()">Agregar estudiante</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nombre</th>
+              <th>Semestre</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of form().estudiantes; let i = index; trackBy: trackByIndex">
+              <td><input [(ngModel)]="item.id" /></td>
+              <td><input [(ngModel)]="item.nombre" /></td>
+              <td><input [(ngModel)]="item.semestre" /></td>
+              <td><button type="button" class="danger" (click)="removeEstudiante(i)">Quitar</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel rules" *ngIf="activeTab() === 'reglas'">
+      <div class="table-header">
+        <div>
+          <h2>Distribución de periodos</h2>
+          <p>La suma debe coincidir con el número de periodos.</p>
+        </div>
+        <button type="button" (click)="addDistribucion()">Agregar distribución</button>
+      </div>
+
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr>
+              <th>Especialidad</th>
+              <th class="number">Asignación</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of form().distribucion_periodos; let i = index; trackBy: trackByIndex">
+              <td><input [(ngModel)]="item.especialidad" /></td>
+              <td><input type="number" min="0" [(ngModel)]="item.asignacion" /></td>
+              <td><button type="button" class="danger" (click)="removeDistribucion(i)">Quitar</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-header">
+        <div>
+          <h2>Combinaciones</h2>
+          <p>Bloques consecutivos X2 o X4.</p>
+        </div>
+        <button type="button" (click)="addCombinacion()">Agregar combinación</button>
+      </div>
+
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr>
+              <th>Especialidad 1</th>
+              <th>Especialidad 2</th>
+              <th>Bloque</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of form().combinaciones; let i = index; trackBy: trackByIndex">
+              <td><input [(ngModel)]="item.especialidad_1" /></td>
+              <td><input [(ngModel)]="item.especialidad_2" /></td>
+              <td>
+                <select [(ngModel)]="item.bloque">
+                  <option value="X2">X2</option>
+                  <option value="X4">X4</option>
+                </select>
+              </td>
+              <td><button type="button" class="danger" (click)="removeCombinacion(i)">Quitar</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-header">
+        <div>
+          <h2>Restricciones</h2>
+          <p>Preferencias institucionales por estudiante.</p>
+        </div>
+        <button type="button" (click)="addRestriccion()">Agregar restricción</button>
+      </div>
+
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr>
+              <th>Estudiante</th>
+              <th>Institución</th>
+              <th>Especialidad</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of form().restricciones; let i = index; trackBy: trackByIndex">
+              <td><input [(ngModel)]="item.estudiante" /></td>
+              <td><input [(ngModel)]="item.institucion" /></td>
+              <td><input [(ngModel)]="item.especialidad" placeholder="Todas si queda vacío" /></td>
+              <td><button type="button" class="danger" (click)="removeRestriccion(i)">Quitar</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" *ngIf="activeTab() === 'resultados'">
+      <div class="table-header">
+        <div>
+          <h2>Resultados por estudiante</h2>
+          <p>Filtra por ID o nombre y descarga la matriz plana.</p>
+        </div>
+        <button type="button" (click)="downloadResultadosPlano()" [disabled]="!resultados().length">
+          Descargar CSV
+        </button>
+      </div>
+
+      <div class="result-tools">
+        <label>
+          Buscar estudiante
+          <input
+            [ngModel]="resultFilter()"
+            (ngModelChange)="resultFilter.set($event)"
+            placeholder="ID o nombre"
+          />
+        </label>
+        <label class="check-filter">
+          <input type="checkbox" [ngModel]="pendingOnly()" (ngModelChange)="pendingOnly.set($event)" />
+          Solo estudiantes con pendientes
+        </label>
+      </div>
+
+      <div class="result-summary">
+        <div>
+          <span>Asignaciones</span>
+          <strong>{{ resultadosFiltrados().length }}</strong>
+        </div>
+        <div>
+          <span>Pendientes</span>
+          <strong [class.warn]="pendientes() > 0">{{ pendientes() }}</strong>
+        </div>
+      </div>
+
+      <div class="student-result" *ngFor="let group of resultadoPorEstudiante(); trackBy: trackByIndex">
+        <h2>
+          Estudiante {{ group.estudiante }}
+          <small *ngIf="studentName(group.estudiante)">· {{ studentName(group.estudiante) }}</small>
+        </h2>
+        <div class="period-grid">
+          <div class="period-cell" *ngFor="let row of group.rows; trackBy: trackByIndex" [class.pending]="row.pendiente">
+            <span>Periodo {{ row.periodo }}</span>
+            <strong>{{ row.especialidad }}</strong>
+            <small>{{ row.institucion }}</small>
+          </div>
+        </div>
+      </div>
+
+      <p class="empty" *ngIf="resultados().length === 0">Ejecuta una parametría para ver resultados.</p>
+      <p class="empty" *ngIf="resultados().length > 0 && resultadoPorEstudiante().length === 0">
+        No hay estudiantes que coincidan con el filtro.
+      </p>
+    </section>
+
+    <section class="panel analysis" *ngIf="activeTab() === 'analisis'">
+      <div class="table-header">
+        <div>
+          <h2>Hoja de análisis</h2>
+          <p>Resumen operativo para comparar estrategias de asignación.</p>
+        </div>
+        <button type="button" (click)="downloadAnalisisPlano()" [disabled]="!analisis()">
+          Descargar análisis CSV
+        </button>
+      </div>
+
+      <ng-container *ngIf="analisis() as data; else emptyAnalysis">
+        <div class="analysis-grid">
+          <div *ngFor="let item of data.resumen | keyvalue">
+            <span>{{ item.key.replaceAll('_', ' ') | uppercase }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
+        </div>
+
+        <h2>Resumen por especialidad</h2>
+        <div class="table-wrap compact">
+          <table>
+            <thead>
+              <tr>
+                <th>Especialidad</th>
+                <th>Asign./estudiante</th>
+                <th>Demanda</th>
+                <th>Capacidad</th>
+                <th>Asignado</th>
+                <th>Pendiente</th>
+                <th>Cobertura</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of data.resumen_especialidad; trackBy: trackByIndex">
+                <td>{{ row['especialidad'] }}</td>
+                <td>{{ row['asignacion_estudiante'] }}</td>
+                <td>{{ row['demanda_teorica'] }}</td>
+                <td>{{ row['capacidad_total'] }}</td>
+                <td>{{ row['asignado'] }}</td>
+                <td>{{ row['pendiente'] }}</td>
+                <td>{{ row['cobertura'] | percent:'1.1-1' }}</td>
+                <td>{{ row['estado'] }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>Análisis de bloques consecutivos</h2>
+        <div class="table-wrap compact">
+          <table>
+            <thead>
+              <tr>
+                <th>Especialidad 1</th>
+                <th>Especialidad 2</th>
+                <th>Bloque</th>
+                <th>Estudiantes</th>
+                <th>Cumplen</th>
+                <th>Misma institución</th>
+                <th>Diferente</th>
+                <th>Con pendiente</th>
+                <th>Cumplimiento</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of data.bloques; trackBy: trackByIndex">
+                <td>{{ row['especialidad_1'] }}</td>
+                <td>{{ row['especialidad_2'] }}</td>
+                <td>{{ row['tipo_bloque'] }}</td>
+                <td>{{ row['estudiantes'] }}</td>
+                <td>{{ row['cumplen_consecutividad'] }}</td>
+                <td>{{ row['misma_institucion'] }}</td>
+                <td>{{ row['institucion_diferente'] }}</td>
+                <td>{{ row['con_pendiente'] }}</td>
+                <td>{{ row['cumplimiento'] | percent:'1.1-1' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>Restricciones institucionales</h2>
+        <div class="table-wrap compact">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Preferida</th>
+                <th>Especialidad</th>
+                <th>Aplicables</th>
+                <th>En preferida</th>
+                <th>Proveedor único</th>
+                <th>Residual</th>
+                <th>Otras</th>
+                <th>Pendientes</th>
+                <th>Cumplimiento</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of data.restricciones; trackBy: trackByIndex">
+                <td>{{ row['id'] }}</td>
+                <td>{{ row['institucion_preferida'] }}</td>
+                <td>{{ row['especialidad'] }}</td>
+                <td>{{ row['practicas_aplicables'] }}</td>
+                <td>{{ row['en_preferida'] }}</td>
+                <td>{{ row['proveedor_unico'] }}</td>
+                <td>{{ row['en_residual'] }}</td>
+                <td>{{ row['otras_instituciones'] }}</td>
+                <td>{{ row['pendientes'] }}</td>
+                <td>{{ row['cumplimiento_preferida'] | percent:'1.1-1' }}</td>
+                <td>{{ row['estado'] }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>Detalle de ocupación</h2>
+        <div class="table-wrap compact">
+          <table>
+            <thead>
+              <tr>
+                <th>Institución</th>
+                <th>Especialidad</th>
+                <th>Periodo</th>
+                <th>Capacidad</th>
+                <th>Asignados</th>
+                <th>Disponibles</th>
+                <th>Ocupación</th>
+                <th>Tipo</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of data.ocupacion; trackBy: trackByIndex">
+                <td>{{ row['institucion'] }}</td>
+                <td>{{ row['especialidad'] }}</td>
+                <td>{{ row['periodo'] }}</td>
+                <td>{{ row['capacidad'] }}</td>
+                <td>{{ row['asignados'] }}</td>
+                <td>{{ row['disponibles'] }}</td>
+                <td>{{ row['ocupacion'] | percent:'1.1-1' }}</td>
+                <td>{{ row['tipo'] }}</td>
+                <td>{{ row['estado'] }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+
+      <ng-template #emptyAnalysis>
+        <p class="empty">Ejecuta una parametría para generar el análisis.</p>
+      </ng-template>
+    </section>
+  </section>
+</main>

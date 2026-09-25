@@ -1,0 +1,203 @@
+<section class="dashboard">
+  <div class="dashboard-header">
+    <div>
+      <h2>Dashboard gerencial</h2>
+      <p>Monitoreo global de rotaciones consolidadas por escenario, servicio y semestre.</p>
+    </div>
+    <div class="dashboard-actions">
+      <button type="button" routerLink="/">Configuración</button>
+      <button type="button" (click)="load()" [disabled]="loading()">Actualizar</button>
+    </div>
+  </div>
+
+  <div class="dashboard-status error" *ngIf="error()">{{ error() }}</div>
+  <div class="dashboard-status" *ngIf="loading()">Cargando resumen gerencial...</div>
+
+  <ng-container *ngIf="data() as dashboard">
+    <p class="empty" *ngIf="!hasData()">Aún no hay ejecuciones para calcular métricas gerenciales.</p>
+
+    <ng-container *ngIf="hasData()">
+      <div class="kpi-grid">
+        <div>
+          <span>Estudiantes únicos</span>
+          <strong>{{ number(dashboard.kpis.estudiantes_unicos) }}</strong>
+        </div>
+        <div>
+          <span>Rotaciones</span>
+          <strong>{{ number(dashboard.kpis.rotaciones) }}</strong>
+        </div>
+        <div>
+          <span>Escenarios</span>
+          <strong>{{ number(dashboard.kpis.escenarios) }}</strong>
+        </div>
+        <div>
+          <span>Áreas de rotación</span>
+          <strong>{{ number(dashboard.kpis.areas_rotacion) }}</strong>
+        </div>
+        <div>
+          <span>Rotaciones pendientes</span>
+          <strong [class.warn]="dashboard.kpis.rotaciones_pendientes > 0">
+            {{ number(dashboard.kpis.rotaciones_pendientes) }}
+          </strong>
+        </div>
+        <div>
+          <span>Rot. promedio/est.</span>
+          <strong>{{ number(dashboard.kpis.rotaciones_promedio_por_estudiante) }}</strong>
+        </div>
+        <div>
+          <span>Diversificación</span>
+          <strong>{{ percent(dashboard.kpis.indice_diversificacion_institucional) }}</strong>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <section class="dashboard-panel wide">
+          <header>
+            <h3>Top escenarios por carga</h3>
+            <span>{{ dashboard.alcance.ejecuciones }} ejecución(es)</span>
+          </header>
+          <div class="bar-list">
+            <article *ngFor="let row of dashboard.top_escenarios_por_carga; trackBy: trackByIndex">
+              <div>
+                <strong>{{ row.institucion }}</strong>
+                <span>{{ row.rotaciones }} rotaciones · {{ percent(row.participacion) }}</span>
+              </div>
+              <div class="bar-track">
+                <i [style.width]="barWidth(row.rotaciones, max(dashboard.top_escenarios_por_carga, 'rotaciones'))"></i>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="dashboard-panel">
+          <header>
+            <h3>Balance público / privado</h3>
+          </header>
+          <div class="compact-list">
+            <article *ngFor="let row of dashboard.balance_publico_privado; trackBy: trackByIndex">
+              <span>{{ row.tipo }}</span>
+              <strong>{{ row.rotaciones }} · {{ percent(row.participacion) }}</strong>
+            </article>
+          </div>
+        </section>
+
+        <section class="dashboard-panel">
+          <header>
+            <h3>Servicios con mayor demanda</h3>
+          </header>
+          <div class="bar-list small">
+            <article *ngFor="let row of dashboard.servicios_mayor_demanda; trackBy: trackByIndex">
+              <div>
+                <strong>{{ row.servicio }}</strong>
+                <span>{{ row.rotaciones }} rotaciones</span>
+              </div>
+              <div class="bar-track">
+                <i [style.width]="barWidth(row.rotaciones, max(dashboard.servicios_mayor_demanda, 'rotaciones'))"></i>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="dashboard-panel">
+          <header>
+            <h3>Presión por semestre</h3>
+          </header>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Semestre</th>
+                  <th>Rotaciones</th>
+                  <th>Estudiantes</th>
+                  <th>Promedio</th>
+                  <th>Pend.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of dashboard.semestres_presion_rotacion; trackBy: trackByIndex">
+                  <td>{{ row.semestre }}</td>
+                  <td>{{ row.rotaciones }}</td>
+                  <td>{{ row.estudiantes_unicos }}</td>
+                  <td>{{ number(row.rotaciones_promedio_estudiante) }}</td>
+                  <td>{{ row.pendientes }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="dashboard-panel">
+          <header>
+            <h3>Escenarios subutilizados</h3>
+          </header>
+          <div class="compact-list">
+            <article *ngFor="let row of dashboard.escenarios_subutilizados; trackBy: trackByIndex">
+              <span>{{ row.institucion }}</span>
+              <strong>{{ percent(row.ocupacion) }} ocupación</strong>
+            </article>
+            <p class="empty" *ngIf="dashboard.escenarios_subutilizados.length === 0">Sin escenarios subutilizados.</p>
+          </div>
+        </section>
+
+        <section class="dashboard-panel">
+          <header>
+            <h3>Dependencia crítica</h3>
+          </header>
+          <div class="compact-list">
+            <article *ngFor="let row of dashboard.instituciones_dependencia_critica; trackBy: trackByIndex">
+              <span>{{ row.institucion }}</span>
+              <strong>{{ percent(row.participacion) }}</strong>
+            </article>
+            <p class="empty" *ngIf="dashboard.instituciones_dependencia_critica.length === 0">
+              Sin concentración crítica.
+            </p>
+          </div>
+        </section>
+
+        <section class="dashboard-panel">
+          <header>
+            <h3>Rotaciones pendientes por causa</h3>
+          </header>
+          <div class="compact-list">
+            <article *ngFor="let row of dashboard.rotaciones_pendientes_por_causa; trackBy: trackByIndex">
+              <span>{{ row.causa }}</span>
+              <strong>{{ row.rotaciones }}</strong>
+            </article>
+            <p class="empty" *ngIf="dashboard.rotaciones_pendientes_por_causa.length === 0">Sin pendientes.</p>
+          </div>
+        </section>
+
+        <section class="dashboard-panel wide">
+          <header>
+            <h3>Capacidad sugerida vs usada</h3>
+            <span>Top brechas</span>
+          </header>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Institución</th>
+                  <th>Servicio</th>
+                  <th>Usado</th>
+                  <th>Cap. actual</th>
+                  <th>Cap. sugerida</th>
+                  <th>Brecha sug.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of dashboard.capacidad_sugerida_vs_usada; trackBy: trackByIndex">
+                  <td>{{ row.institucion }}</td>
+                  <td>{{ row.servicio }}</td>
+                  <td>{{ row.periodos_usados }}</td>
+                  <td>{{ row.capacidad_actual }}</td>
+                  <td>{{ row.capacidad_sugerida }}</td>
+                  <td>{{ row.brecha_sugerida }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </ng-container>
+  </ng-container>
+</section>
