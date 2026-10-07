@@ -1,0 +1,47 @@
+<section class="page">
+  <header class="page-header">
+    <div>
+      <span>Gestión principal</span>
+      <h1>Parametrías cargadas</h1>
+      <p>Consulta, crea o abre escenarios de asignación sin ejecutar el algoritmo desde esta pantalla.</p>
+    </div>
+
+    <div class="actions">
+      <button type="button" (click)="load()" [disabled]="loading()">Actualizar</button>
+      <a class="primary" routerLink="/parametrias/nueva">Nueva parametría</a>
+    </div>
+  </header>
+
+  <div class="status error" *ngIf="error()">{{ error() }}</div>
+  <div class="status" *ngIf="loading()">Cargando parametrías...</div>
+
+  <div class="summary">
+    <article>
+      <span>Total parametrías</span>
+      <strong>{{ parametrias().length }}</strong>
+    </article>
+    <article>
+      <span>Entrada operativa</span>
+      <strong>Crear / editar</strong>
+    </article>
+  </div>
+
+  <section class="list" *ngIf="parametrias().length; else emptyState">
+    <article *ngFor="let item of parametrias(); trackBy: trackById">
+      <div>
+        <h2>{{ item.nombre }}</h2>
+        <p>#{{ item.id }} · {{ item.numero_periodos }} periodos · {{ item.estrategia }}</p>
+        <small>Residual: {{ item.institucion_residual }}</small>
+      </div>
+      <a routerLink="/parametrias/{{ item.id }}">Abrir</a>
+    </article>
+  </section>
+
+  <ng-template #emptyState>
+    <section class="empty">
+      <h2>No hay parametrías cargadas</h2>
+      <p>Crea la primera parametría para configurar instituciones, estudiantes, reglas y asignaciones.</p>
+      <a class="primary" routerLink="/parametrias/nueva">Crear parametría</a>
+    </section>
+  </ng-template>
+</section>

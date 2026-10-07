@@ -1,6 +1,12 @@
 :host {
-  background: #f4f8f6;
-  color: #1d2c28;
+  --surface: #f4f4f4;
+  --primary: #193f9e;
+  --navy: #021f59;
+  --ink: #102143;
+  --muted: #667085;
+  --line: #d8deea;
+  background: var(--surface);
+  color: var(--ink);
   display: block;
   min-height: 100dvh;
 }
@@ -28,7 +34,7 @@
 .dashboard-header p,
 .dashboard-panel header span,
 .empty {
-  color: #6d7c78;
+  color: var(--muted);
 }
 
 .dashboard-header p {
@@ -42,16 +48,16 @@
 
 button {
   background: #ffffff;
-  border: 1px solid #c8d6d1;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  color: #1d2c28;
+  color: var(--ink);
   cursor: pointer;
   min-height: 36px;
   padding: 0 12px;
 }
 
 button:hover:not(:disabled) {
-  border-color: #678079;
+  border-color: var(--primary);
 }
 
 button:disabled {
@@ -60,10 +66,10 @@ button:disabled {
 }
 
 .dashboard-status {
-  background: #f7faf9;
-  border: 1px solid #dce6e2;
+  background: #ffffff;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  color: #41504c;
+  color: var(--ink);
   padding: 10px 12px;
 }
 
@@ -82,7 +88,7 @@ button:disabled {
 .kpi-grid div,
 .dashboard-panel {
   background: #ffffff;
-  border: 1px solid #dce6e2;
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 
@@ -93,7 +99,7 @@ button:disabled {
 
 .kpi-grid span,
 .optimization-label {
-  color: #50615c;
+  color: var(--navy);
   display: block;
   font-size: 11px;
   font-weight: 700;
@@ -155,26 +161,26 @@ button:disabled {
 
 .bar-list span,
 .compact-list span {
-  color: #6d7c78;
+  color: var(--muted);
   font-size: 12px;
 }
 
 .bar-track {
-  background: #edf2f0;
+  background: #e2e7f3;
   border-radius: 999px;
   height: 9px;
   overflow: hidden;
 }
 
 .bar-track i {
-  background: #1f8f62;
+  background: var(--primary);
   border-radius: inherit;
   display: block;
   height: 100%;
 }
 
 .bar-list.small .bar-track i {
-  background: #163f68;
+  background: var(--navy);
 }
 
 .compact-list {
@@ -184,7 +190,7 @@ button:disabled {
 
 .compact-list article {
   align-items: center;
-  border-top: 1px solid #edf2f0;
+  border-top: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -197,7 +203,7 @@ button:disabled {
 }
 
 .table-wrap {
-  border: 1px solid #edf2f0;
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow-x: auto;
 }
@@ -210,14 +216,14 @@ table {
 
 th,
 td {
-  border-bottom: 1px solid #edf2f0;
+  border-bottom: 1px solid var(--line);
   padding: 8px;
   text-align: left;
 }
 
 th {
-  background: #f7faf9;
-  color: #50615c;
+  background: var(--surface);
+  color: var(--navy);
   font-size: 11px;
   text-transform: uppercase;
 }

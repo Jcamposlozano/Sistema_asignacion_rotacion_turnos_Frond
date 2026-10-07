@@ -72,16 +72,31 @@ export interface EjecucionGuardada {
   total_asignaciones: number;
   total_pendientes: number;
   mensaje?: string | null;
+  created_at?: string | null;
 }
 
 export interface AsignacionResultado {
   id: number;
   ejecucion_id: number;
   estudiante_id: string;
+  estudiante_nombre?: string | null;
+  estudiante_semestre?: string | null;
   periodo: number;
   especialidad: string;
   institucion: string;
   pendiente: boolean;
+}
+
+export interface MatrizAsignacionRow {
+  estudiante_id: string;
+  periodo: number;
+  especialidad: string;
+  institucion: string;
+}
+
+export interface MatrizAsignacionPayload {
+  filas: MatrizAsignacionRow[];
+  mensaje?: string | null;
 }
 
 export interface AnalisisAsignacion {
@@ -270,6 +285,33 @@ export class AsignacionApiService {
     return this.http.delete<void>(`${this.baseUrl}/parametrias/${id}`);
   }
 
+  importarEstudiantesArchivo(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<EstudiantePayload[]>(
+      `${this.baseUrl}/parametrias/importar-estudiantes`,
+      formData,
+    );
+  }
+
+  importarInstitucionesArchivo(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<InstitucionPayload[]>(
+      `${this.baseUrl}/parametrias/importar-instituciones`,
+      formData,
+    );
+  }
+
+  importarPlantillaParametria(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<ParametriaPayload>(
+      `${this.baseUrl}/parametrias/importar-plantilla`,
+      formData,
+    );
+  }
+
   ejecutarParametria(id: number) {
     return this.http.post<EjecucionResultado>(
       `${this.baseUrl}/asignaciones/parametrias/${id}/ejecutar`,
@@ -280,6 +322,28 @@ export class AsignacionApiService {
   obtenerUltimaEjecucion(parametriaId: number) {
     return this.http.get<EjecucionGuardada>(
       `${this.baseUrl}/asignaciones/parametrias/${parametriaId}/ultima`,
+    );
+  }
+
+  listarEjecuciones(parametriaId: number) {
+    return this.http.get<EjecucionGuardada[]>(
+      `${this.baseUrl}/asignaciones/parametrias/${parametriaId}/ejecuciones`,
+    );
+  }
+
+  cargarMatrizAjustada(parametriaId: number, payload: MatrizAsignacionPayload) {
+    return this.http.post<EjecucionGuardada>(
+      `${this.baseUrl}/asignaciones/parametrias/${parametriaId}/matriz`,
+      payload,
+    );
+  }
+
+  cargarMatrizAjustadaArchivo(parametriaId: number, file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<EjecucionGuardada>(
+      `${this.baseUrl}/asignaciones/parametrias/${parametriaId}/matriz-archivo`,
+      formData,
     );
   }
 

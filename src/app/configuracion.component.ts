@@ -1,14 +1,16 @@
-import { CommonModule } from '@angular/common';
+import { CommonModule, Location } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import {
   AnalisisAsignacion,
   AsignacionApiService,
   AsignacionResultado,
   DiagnosticoAsignacion,
+  EjecucionGuardada,
   InstitucionPayload,
+  MatrizAsignacionPayload,
   OptimizacionCuposOut,
   OptimizacionParametriaOut,
   ParametriaPayload,
@@ -26,10 +28,14 @@ type AgentStatus = 'idle' | 'working' | 'done' | 'warning';
 })
 export class ConfiguracionComponent implements OnInit {
   private readonly api = inject(AsignacionApiService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly location = inject(Location);
 
   readonly activeTab = signal<Tab>('parametria');
   readonly selectedParametriaId = signal<number | null>(null);
   readonly parametrias = signal<ParametriaResumen[]>([]);
+  readonly ejecucionesGuardadas = signal<EjecucionGuardada[]>([]);
   readonly resultados = signal<AsignacionResultado[]>([]);
   readonly analisis = signal<AnalisisAsignacion | null>(null);
   readonly diagnostico = signal<DiagnosticoAsignacion | null>(null);
@@ -158,7 +164,14 @@ export class ConfiguracionComponent implements OnInit {
   readonly agentRisks = computed(() => this.diagnostico()?.riesgos.slice(0, 3) ?? []);
 
   ngOnInit(): void {
-    this.loadParametrias();
+    this.route.paramMap.subscribe((params) => {
+      const id = params.get('id');
+      if (id) {
+        this.loadParametria(Number(id));
+      } else {
+        this.newParametria();
+      }
+    });
   }
 
   setTab(tab: Tab): void {
@@ -199,6 +212,7 @@ export class ConfiguracionComponent implements OnInit {
         this.diagnostico.set(null);
         this.optimizationResult.set(null);
         this.lastExecutionId.set(null);
+        this.loadEjecucionesGuardadas(payload.id);
         this.loading.set(false);
         this.setAgent(
           'idle',
@@ -217,6 +231,7 @@ export class ConfiguracionComponent implements OnInit {
     this.analisis.set(null);
     this.diagnostico.set(null);
     this.optimizationResult.set(null);
+    this.ejecucionesGuardadas.set([]);
     this.lastExecutionId.set(null);
     this.setAgent('idle', 'Formulario nuevo listo. Completa la parametría antes de ejecutar el algoritmo.');
     this.message('Formulario listo para una parametría nueva.');
@@ -229,9 +244,37 @@ export class ConfiguracionComponent implements OnInit {
     this.analisis.set(null);
     this.diagnostico.set(null);
     this.optimizationResult.set(null);
+    this.ejecucionesGuardadas.set([]);
     this.lastExecutionId.set(null);
     this.setAgent('idle', 'Datos de ejemplo cargados. Puedes guardarlos y ejecutar una simulación.');
     this.message('Datos de ejemplo cargados.');
+  }
+
+  importPlantillaParametria(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+
+    this.loading.set(true);
+    this.setAgent('working', 'Leyendo plantilla Excel de parametría.');
+    this.api.importarPlantillaParametria(file).subscribe({
+      next: (payload) => {
+        this.form.set(payload);
+        this.resultados.set([]);
+        this.analisis.set(null);
+        this.diagnostico.set(null);
+        this.optimizationResult.set(null);
+        this.ejecucionesGuardadas.set([]);
+        this.lastExecutionId.set(null);
+        this.loading.set(false);
+        this.setAgent('done', 'Plantilla cargada. Revisa la parametría y guarda para persistirla.');
+        this.message('Plantilla Excel cargada correctamente. Recuerda guardar la parametría.');
+      },
+      error: (err) => this.fail(this.errorMessage(err, 'No fue posible leer la plantilla Excel.')),
+    });
   }
 
   save(): void {
@@ -259,7 +302,9 @@ export class ConfiguracionComponent implements OnInit {
     request.subscribe({
       next: (response) => {
         this.selectedParametriaId.set(response.id);
-        this.loadParametrias(false);
+        if (!selectedId) {
+          this.location.replaceState(`/parametrias/${response.id}`);
+        }
         if (runAfterSave) {
           this.execute(response.id);
           return;
@@ -268,7 +313,7 @@ export class ConfiguracionComponent implements OnInit {
         this.setAgent('done', 'Parametría guardada. El siguiente paso sugerido es ejecutar o consultar resultados guardados.');
         this.message(`${response.mensaje}. Ahora presiona Ejecutar para generar resultados.`);
       },
-      error: (err) => this.fail(err?.error?.detail ?? 'No fue posible guardar la parametría.'),
+      error: (err) => this.fail(this.errorMessage(err, 'No fue posible guardar la parametría.')),
     });
   }
 
@@ -282,9 +327,7 @@ export class ConfiguracionComponent implements OnInit {
     this.api.eliminarParametria(selectedId).subscribe({
       next: () => {
         this.loading.set(false);
-        this.message(`Parametría ${selectedId} eliminada.`);
-        this.newParametria();
-        this.loadParametrias();
+        this.router.navigate(['/parametrias']);
       },
       error: () => this.fail('No fue posible eliminar la parametría.'),
     });
@@ -340,11 +383,30 @@ export class ConfiguracionComponent implements OnInit {
     });
   }
 
+  loadSavedExecution(ejecucionId: number): void {
+    this.loading.set(true);
+    this.diagnostico.set(null);
+    this.optimizationResult.set(null);
+    this.setAgent('working', `Cargando la malla guardada ${ejecucionId} sin recalcular algoritmo.`);
+    this.loadExecutionResults(ejecucionId, `Malla guardada ${ejecucionId} cargada sin ejecutar el algoritmo.`);
+  }
+
+  private loadEjecucionesGuardadas(parametriaId: number): void {
+    this.api.listarEjecuciones(parametriaId).subscribe({
+      next: (items) => this.ejecucionesGuardadas.set(items),
+      error: () => this.ejecucionesGuardadas.set([]),
+    });
+  }
+
   private loadExecutionResults(ejecucionId: number, message: string): void {
     this.api.obtenerResultados(ejecucionId).subscribe({
       next: (rows) => {
         this.resultados.set(rows);
         this.lastExecutionId.set(ejecucionId);
+        const selectedId = this.selectedParametriaId();
+        if (selectedId) {
+          this.loadEjecucionesGuardadas(selectedId);
+        }
         this.pushAgentStep(`Resultados cargados: ${rows.length} registros para revisar.`);
         this.api.obtenerAnalisis(ejecucionId).subscribe({
           next: (analysis) => {
@@ -393,6 +455,56 @@ export class ConfiguracionComponent implements OnInit {
     this.mutateForm((form) => form.instituciones.splice(index, 1));
   }
 
+  clearInstituciones(): void {
+    if (!confirm('¿Quieres limpiar todas las instituciones y cupos cargados?')) {
+      return;
+    }
+    this.mutateForm((form) => {
+      form.instituciones = [];
+    });
+    this.resultados.set([]);
+    this.analisis.set(null);
+    this.diagnostico.set(null);
+    this.optimizationResult.set(null);
+    this.message('Instituciones y cupos limpiados. Guarda la parametría para persistir el cambio.');
+    this.setAgent('warning', 'Se limpiaron instituciones y cupos. Revisa la parametría antes de ejecutar.');
+  }
+
+  importInstitucionesCsv(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+
+    this.loading.set(true);
+    this.setAgent('working', 'Leyendo archivo de instituciones, especialidades y cupos.');
+    this.api.importarInstitucionesArchivo(file).subscribe({
+      next: (instituciones) => {
+        this.mutateForm((form) => {
+          const merged = new Map(
+            form.instituciones.map((item) => [
+              `${this.normalize(item.institucion)}|${this.normalize(item.especialidad)}`,
+              item,
+            ]),
+          );
+          for (const institucion of instituciones) {
+            merged.set(
+              `${this.normalize(institucion.institucion)}|${this.normalize(institucion.especialidad)}`,
+              institucion,
+            );
+          }
+          form.instituciones = Array.from(merged.values());
+        });
+        this.loading.set(false);
+        this.message(`Se cargaron ${instituciones.length} registros de instituciones desde el archivo.`);
+        this.setAgent('done', 'Instituciones y cupos cargados. Recuerda guardar la parametría.');
+      },
+      error: (err) => this.fail(this.errorMessage(err, 'No fue posible leer el archivo de instituciones.')),
+    });
+  }
+
   addRestriccion(): void {
     this.mutateForm((form) => {
       form.restricciones.push({ estudiante: '', institucion: '', especialidad: null });
@@ -433,6 +545,49 @@ export class ConfiguracionComponent implements OnInit {
     this.mutateForm((form) => form.estudiantes.splice(index, 1));
   }
 
+  clearEstudiantes(): void {
+    if (!confirm('¿Quieres limpiar todos los estudiantes cargados?')) {
+      return;
+    }
+    this.mutateForm((form) => {
+      form.estudiantes = [];
+      form.restricciones = [];
+    });
+    this.resultados.set([]);
+    this.analisis.set(null);
+    this.diagnostico.set(null);
+    this.optimizationResult.set(null);
+    this.message('Estudiantes limpiados. También se limpiaron restricciones asociadas.');
+    this.setAgent('warning', 'Se limpiaron estudiantes y restricciones. Revisa la parametría antes de ejecutar.');
+  }
+
+  importEstudiantesCsv(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+
+    this.loading.set(true);
+    this.setAgent('working', 'Leyendo archivo de estudiantes.');
+    this.api.importarEstudiantesArchivo(file).subscribe({
+      next: (estudiantes) => {
+        this.mutateForm((form) => {
+          const merged = new Map(form.estudiantes.map((item) => [item.id, item]));
+          for (const estudiante of estudiantes) {
+            merged.set(estudiante.id, estudiante);
+          }
+          form.estudiantes = Array.from(merged.values());
+        });
+        this.loading.set(false);
+        this.message(`Se cargaron ${estudiantes.length} estudiantes desde el archivo.`);
+        this.setAgent('done', 'Lista de estudiantes cargada. Recuerda guardar la parametría para persistirlos.');
+      },
+      error: (err) => this.fail(this.errorMessage(err, 'No fue posible leer el archivo de estudiantes.')),
+    });
+  }
+
   trackByIndex(index: number): number {
     return index;
   }
@@ -459,7 +614,7 @@ export class ConfiguracionComponent implements OnInit {
         this.pushAgentStep(result.resumen);
         this.message('Optimización de cupos calculada.');
       },
-      error: (err) => this.fail(err?.error?.detail ?? 'No fue posible optimizar cupos.'),
+      error: (err) => this.fail(this.errorMessage(err, 'No fue posible optimizar cupos.')),
     });
   }
 
@@ -481,7 +636,7 @@ export class ConfiguracionComponent implements OnInit {
         this.pushAgentStep(result.resumen);
         this.message('Optimización validada. La parametría oficial no fue modificada.');
       },
-      error: (err) => this.fail(err?.error?.detail ?? 'No fue posible validar la optimización.'),
+      error: (err) => this.fail(this.errorMessage(err, 'No fue posible validar la optimización.')),
     });
   }
 
@@ -554,8 +709,22 @@ export class ConfiguracionComponent implements OnInit {
     return 'Mantener cupos';
   }
 
+  formatExecutionDate(value: string | null | undefined): string {
+    if (!value) {
+      return 'Sin fecha registrada';
+    }
+    return new Intl.DateTimeFormat('es-CO', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(value));
+  }
+
   studentName(estudianteId: string): string {
-    return this.estudiantesPorId().get(estudianteId) ?? '';
+    const fromForm = this.estudiantesPorId().get(estudianteId);
+    if (fromForm) {
+      return fromForm;
+    }
+    return this.resultados().find((row) => row.estudiante_id === estudianteId)?.estudiante_nombre ?? '';
   }
 
   downloadResultadosPlano(): void {
@@ -570,14 +739,14 @@ export class ConfiguracionComponent implements OnInit {
       rowsByStudent.set(row.estudiante_id, rows);
     }
     const periodos = this.form().asignacion.numero_periodos;
-    const headers = ['ID'];
+    const headers = ['ID', 'NOMBRE'];
     for (let p = 1; p <= periodos; p += 1) {
       headers.push(`PERIODO ${p} (Especialidad)`, `ESCENARIO ${p} (Institución)`);
     }
     const matrix = [headers];
     for (const [studentId, rows] of rowsByStudent.entries()) {
       const byPeriod = new Map(rows.map((row) => [row.periodo, row]));
-      const line = [studentId];
+      const line = [studentId, this.studentName(studentId)];
       for (let p = 1; p <= periodos; p += 1) {
         const row = byPeriod.get(p);
         line.push(row?.especialidad ?? '', row?.institucion ?? '');
@@ -585,6 +754,33 @@ export class ConfiguracionComponent implements OnInit {
       matrix.push(line);
     }
     this.downloadCsv(`resultados_asignacion_${this.selectedParametriaId() ?? 'actual'}.csv`, matrix);
+  }
+
+  importMatrizCsv(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    const selectedId = this.selectedParametriaId();
+    if (!selectedId) {
+      this.fail('Selecciona una parametría antes de cargar una matriz ajustada.');
+      return;
+    }
+    if (!file) {
+      return;
+    }
+
+    this.loading.set(true);
+    this.setAgent('working', 'Cargando matriz ajustada como una nueva malla guardada.');
+    this.api.cargarMatrizAjustadaArchivo(selectedId, file).subscribe({
+      next: (execution) => {
+        this.pushAgentStep(`Malla ajustada guardada como ejecución ${execution.id}.`);
+        this.loadExecutionResults(
+          execution.id,
+          `Malla ajustada guardada y cargada como ejecución ${execution.id}.`,
+        );
+      },
+      error: (err) => this.fail(this.errorMessage(err, 'No fue posible cargar la matriz ajustada.')),
+    });
   }
 
   downloadAnalisisPlano(): void {
@@ -641,6 +837,23 @@ export class ConfiguracionComponent implements OnInit {
     this.pushAgentStep(text);
   }
 
+  private errorMessage(error: unknown, fallback: string): string {
+    const detail = (error as { error?: { detail?: unknown } })?.error?.detail;
+    if (typeof detail === 'string') {
+      return detail;
+    }
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item) => {
+          const path = Array.isArray(item?.loc) ? item.loc.join('.') : '';
+          const message = item?.msg ?? 'Error de validación';
+          return path ? `${path}: ${message}` : String(message);
+        })
+        .join(' | ');
+    }
+    return fallback;
+  }
+
   private setAgent(status: AgentStatus, firstStep: string): void {
     this.agentStatus.set(status);
     this.agentSteps.set([firstStep]);
@@ -676,6 +889,101 @@ export class ConfiguracionComponent implements OnInit {
       return `"${text.replace(/"/g, '""')}"`;
     }
     return text;
+  }
+
+  private parseCsv(content: string): string[][] {
+    const delimiter = this.detectDelimiter(content);
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let cell = '';
+    let quoted = false;
+    const text = content.replace(/^\uFEFF/, '');
+
+    for (let index = 0; index < text.length; index += 1) {
+      const char = text[index];
+      const next = text[index + 1];
+      if (char === '"' && quoted && next === '"') {
+        cell += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = !quoted;
+      } else if (char === delimiter && !quoted) {
+        row.push(cell.trim());
+        cell = '';
+      } else if ((char === '\n' || char === '\r') && !quoted) {
+        if (char === '\r' && next === '\n') {
+          index += 1;
+        }
+        row.push(cell.trim());
+        if (row.some((value) => value)) {
+          rows.push(row);
+        }
+        row = [];
+        cell = '';
+      } else {
+        cell += char;
+      }
+    }
+
+    row.push(cell.trim());
+    if (row.some((value) => value)) {
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  private detectDelimiter(content: string): string {
+    const firstLine = content.split(/\r?\n/)[0] ?? '';
+    const semicolons = (firstLine.match(/;/g) ?? []).length;
+    const commas = (firstLine.match(/,/g) ?? []).length;
+    return semicolons > commas ? ';' : ',';
+  }
+
+  private findColumn(header: string[], aliases: string[]): number {
+    const index = header.findIndex((column) =>
+      aliases.some((alias) => column === alias || column.includes(alias)),
+    );
+    return index >= 0 ? index : 0;
+  }
+
+  private matrixRowsToPayload(rows: string[][]): MatrizAsignacionPayload {
+    const header = rows[0].map((cell) => this.normalize(cell));
+    const idIndex = this.findColumn(header, ['id', 'documento', 'codigo']);
+    const periodColumns = header
+      .map((column, index) => {
+        const match = column.match(/periodo\s*(\d+)/);
+        return match ? { period: Number(match[1]), index } : null;
+      })
+      .filter((item): item is { period: number; index: number } => Boolean(item));
+
+    if (!periodColumns.length) {
+      throw new Error('La matriz no tiene columnas de periodos.');
+    }
+
+    const filas = rows.slice(1).flatMap((row) => {
+      const estudianteId = row[idIndex]?.trim() ?? '';
+      if (!estudianteId) {
+        return [];
+      }
+      return periodColumns.map(({ period, index }) => ({
+        estudiante_id: estudianteId,
+        periodo: period,
+        especialidad: row[index]?.trim() ?? '',
+        institucion: row[this.findScenarioColumn(header, period, index)]?.trim() ?? '',
+      }));
+    });
+
+    return {
+      filas,
+      mensaje: 'Malla cargada desde CSV ajustado por usuario.',
+    };
+  }
+
+  private findScenarioColumn(header: string[], period: number, periodColumnIndex: number): number {
+    const exact = header.findIndex(
+      (column) => column.includes('escenario') && column.includes(String(period)),
+    );
+    return exact >= 0 ? exact : periodColumnIndex + 1;
   }
 
   private objectToRows(row: Record<string, string | number>): string[][] {

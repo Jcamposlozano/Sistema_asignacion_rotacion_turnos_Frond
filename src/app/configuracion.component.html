@@ -1,65 +1,37 @@
-<main class="app-shell">
-  <aside class="sidebar">
-    <div class="brand">
-      <span class="brand-mark">AM</span>
-      <div>
-        <strong>Asignación Medicina</strong>
-        <small>Parametría y ejecución</small>
-      </div>
-    </div>
-
-    <div class="sidebar-actions">
-      <button type="button" class="primary" (click)="newParametria()">Nueva</button>
-      <button type="button" (click)="loadSample()">Cargar ejemplo</button>
-    </div>
-
-    <section class="saved-list">
-      <header>
-        <span>Parametrías</span>
-        <button type="button" class="icon-button" title="Actualizar lista" (click)="loadParametrias()">
-          ↻
-        </button>
-      </header>
-
-      <button
-        type="button"
-        class="saved-item"
-        *ngFor="let item of parametrias(); trackBy: trackByIndex"
-        [class.active]="selectedParametriaId() === item.id"
-        (click)="loadParametria(item.id)"
-      >
-        <span>{{ item.nombre }}</span>
-        <small>#{{ item.id }} · {{ item.estrategia }}</small>
-      </button>
-
-      <p class="empty" *ngIf="parametrias().length === 0">Sin parametrías guardadas.</p>
-    </section>
-  </aside>
-
-  <section class="workspace">
+<section class="workspace editor-workspace">
     <header class="topbar">
       <div>
         <h1>{{ form().nombre }}</h1>
         <p>
-          {{ selectedParametriaId() ? 'Editando parametría #' + selectedParametriaId() : 'Nueva parametría' }}
+          {{ selectedParametriaId() ? 'Parametría #' + selectedParametriaId() : 'Nueva parametría' }}
         </p>
       </div>
 
       <div class="topbar-actions">
-        <button type="button" routerLink="/dashboard">
-          Dashboard gerencial
+        <button type="button" routerLink="/parametrias">
+          Volver a parametrías
         </button>
-        <button type="button" (click)="deleteSelected()" [disabled]="!selectedParametriaId() || loading()">
+        <button type="button" routerLink="/dashboard">
+          Dashboard
+        </button>
+        <button type="button" *ngIf="!selectedParametriaId()" (click)="loadSample()" [disabled]="loading()">
+          Cargar ejemplo
+        </button>
+        <label class="file-button">
+          Cargar plantilla Excel
+          <input type="file" accept=".xlsx,.xls" (change)="importPlantillaParametria($event)" />
+        </label>
+        <button type="button" *ngIf="selectedParametriaId()" (click)="deleteSelected()" [disabled]="loading()">
           Eliminar
         </button>
         <button type="button" class="primary" (click)="save()" [disabled]="loading()">Guardar</button>
         <button type="button" class="run" (click)="saveAndExecute()" [disabled]="loading()">
           Guardar y ejecutar
         </button>
-        <button type="button" (click)="viewSavedResults()" [disabled]="!selectedParametriaId() || loading()">
-          Ver resultados
+        <button type="button" *ngIf="selectedParametriaId()" (click)="viewSavedResults()" [disabled]="loading()">
+          Cargar última malla
         </button>
-        <button type="button" class="run" (click)="execute()" [disabled]="!selectedParametriaId() || loading()">
+        <button type="button" *ngIf="selectedParametriaId()" class="run" (click)="execute()" [disabled]="loading()">
           Ejecutar
         </button>
       </div>
@@ -216,7 +188,7 @@
         </label>
         <label>
           Periodos
-          <input type="number" min="6" max="8" [(ngModel)]="form().asignacion.numero_periodos" />
+          <input type="number" min="5" max="8" [(ngModel)]="form().asignacion.numero_periodos" />
         </label>
         <label>
           Estrategia
@@ -247,7 +219,16 @@
           <h2>Instituciones y cupos</h2>
           <p>{{ form().instituciones.length }} registros</p>
         </div>
-        <button type="button" (click)="addInstitucion()">Agregar institución</button>
+        <div class="table-actions">
+          <label class="file-button">
+            Cargar archivo
+            <input type="file" accept=".csv,.xlsx,.xls,text/csv" (change)="importInstitucionesCsv($event)" />
+          </label>
+          <button type="button" class="danger" (click)="clearInstituciones()" [disabled]="!form().instituciones.length">
+            Limpiar instituciones
+          </button>
+          <button type="button" (click)="addInstitucion()">Agregar institución</button>
+        </div>
       </div>
 
       <div class="table-wrap">
@@ -278,7 +259,16 @@
           <h2>Lista de estudiantes</h2>
           <p>{{ form().estudiantes.length }} estudiantes vinculados a esta parametría</p>
         </div>
-        <button type="button" (click)="addEstudiante()">Agregar estudiante</button>
+        <div class="table-actions">
+          <label class="file-button">
+            Cargar archivo
+            <input type="file" accept=".csv,.xlsx,.xls,text/csv" (change)="importEstudiantesCsv($event)" />
+          </label>
+          <button type="button" class="danger" (click)="clearEstudiantes()" [disabled]="!form().estudiantes.length">
+            Limpiar estudiantes
+          </button>
+          <button type="button" (click)="addEstudiante()">Agregar estudiante</button>
+        </div>
       </div>
 
       <div class="table-wrap">
@@ -399,12 +389,44 @@
       <div class="table-header">
         <div>
           <h2>Resultados por estudiante</h2>
-          <p>Filtra por ID o nombre y descarga la matriz plana.</p>
+          <p>Filtra, descarga la matriz plana o carga una matriz ajustada.</p>
         </div>
-        <button type="button" (click)="downloadResultadosPlano()" [disabled]="!resultados().length">
-          Descargar CSV
-        </button>
+        <div class="table-actions">
+          <label class="file-button" [class.disabled]="!selectedParametriaId()">
+            Cargar matriz ajustada
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls,text/csv"
+              [disabled]="!selectedParametriaId()"
+              (change)="importMatrizCsv($event)"
+            />
+          </label>
+          <button type="button" (click)="downloadResultadosPlano()" [disabled]="!resultados().length">
+            Descargar matriz CSV
+          </button>
+        </div>
       </div>
+
+      <section class="saved-executions" *ngIf="ejecucionesGuardadas().length">
+        <header>
+          <div>
+            <strong>Mallas guardadas</strong>
+            <span>Selecciona una ejecución para cargarla sin correr nuevamente el algoritmo.</span>
+          </div>
+        </header>
+        <div class="execution-list">
+          <button
+            type="button"
+            *ngFor="let item of ejecucionesGuardadas(); trackBy: trackByIndex"
+            [class.active]="lastExecutionId() === item.id"
+            (click)="loadSavedExecution(item.id)"
+          >
+            <strong>#{{ item.id }} · {{ item.estado }}</strong>
+            <span>{{ formatExecutionDate(item.created_at) }}</span>
+            <small>{{ item.total_asignaciones }} asignaciones · {{ item.total_pendientes }} pendientes</small>
+          </button>
+        </div>
+      </section>
 
       <div class="result-tools">
         <label>
@@ -606,5 +628,4 @@
         <p class="empty">Ejecuta una parametría para generar el análisis.</p>
       </ng-template>
     </section>
-  </section>
-</main>
+</section>

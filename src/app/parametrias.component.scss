@@ -1,0 +1,175 @@
+:host {
+  --surface: #f4f4f4;
+  --primary: #193f9e;
+  --navy: #021f59;
+  --ink: #102143;
+  --muted: #667085;
+  --line: #d8deea;
+  display: block;
+}
+
+.page {
+  display: grid;
+  gap: 16px;
+  margin: 0 auto;
+  max-width: 1240px;
+  padding: 24px;
+}
+
+.page-header,
+.summary,
+.list article,
+.empty {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.page-header {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding: 20px;
+}
+
+.page-header span {
+  color: var(--primary);
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 26px;
+  margin-top: 4px;
+}
+
+p,
+small,
+.summary span {
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button,
+a {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  min-height: 36px;
+  padding: 0 12px;
+  text-decoration: none;
+}
+
+button:hover:not(:disabled),
+a:hover {
+  border-color: var(--primary);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+.status {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.status.error {
+  background: #fff8f7;
+  border-color: #f0c8c2;
+  color: #a32117;
+}
+
+.summary {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  padding: 14px;
+}
+
+.summary article {
+  border-left: 4px solid var(--primary);
+  padding: 8px 12px;
+}
+
+.summary span,
+.summary strong {
+  display: block;
+}
+
+.summary strong {
+  font-size: 22px;
+  margin-top: 4px;
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.list article {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+.list h2 {
+  font-size: 17px;
+  margin-bottom: 4px;
+}
+
+.list small {
+  display: block;
+  margin-top: 4px;
+}
+
+.empty {
+  padding: 28px;
+  text-align: center;
+}
+
+.empty p {
+  margin: 8px auto 16px;
+  max-width: 560px;
+}
+
+@media (max-width: 720px) {
+  .page-header,
+  .list article {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .summary {
+    grid-template-columns: 1fr;
+  }
+}
